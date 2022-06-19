@@ -1,0 +1,1407 @@
+---
+title: "Happiness Economics: Socioeconomic Determinants and Effects of Personality on Psychological Well-Being"
+author: "Savvy Sivaraks"
+date: "8/31/2021"
+output: html_document
+---
+
+## Introduction
+This project aims to investigate the socioecomonic determinants and effects of personality on psychological well-being in Australia. The dataset is obtained from the study of Melbourne Institute of Applied Economic and Social Research on The Household, Income and Labour Dynamic in Australia (HILDA). The scope of this study is on 2017 datasets which focus on external contextual factors like income, gender, education, marital status and opinions about job and personality traits to determine psychological well-being (or correlation of them with happiness), in other words; whether individuals feel happy and content. The objective is to study whether personality traits are more important determinants of happiness than external factors.
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+Start by downloading required R-packages
+
+```{r}
+library(foreign)
+library(dplyr)
+library(tidyverse)
+library(ggpubr) # for visualisation and plot
+library(ggplot2) # for visualisation and plot
+library(colorspace)
+library(VGAM)
+library(MASS)
+```
+
+Read the sav. datafile, selecting only from year 2017
+
+```{r}
+savvydata = read.spss("Combined q170c.sav", to.data.frame=TRUE)
+```
+
+## Understanding data
+
+```{r}
+dim(savvydata)
+```
+
+```{r}
+#names(savvydata)
+```
+
+The original data has 5588 variables and 23415 observations.
+The name of all variables is in abbreviation which is difficult to understand, therefore data preprocessing is needed.
+
+For this study, the response uses the variable "Psychological Distress - depressed" in which it used likert-scale 1-5 including "All of the time", "Most of the time", "Some of the time","A little of the time", "None of the time" to the question that asks if the participant is depressed.
+
+The independent variables include income, gender, education, marital status, opinions about job and personality traits. For income, it aims to look at weekly gross wages and salary from all jobs included. Gender has only two values namely male and female. For education, it uses the variable 'Highest education level achieved' in which the values include Postgrad- masters or doctorate, Grad diploma - grad and certificate, Bachelor or honours, Adv diploma or diploma, Cert III or IV, Year 12, Year 11 and below, and undertermined. For marital status, the variable is 'marital status from person questionnaire' in which the values include 'legally married', 'de facto', 'separated', 'divorced', 'widowed', 'never married and not defacto'
+
+In terms of labour force, the opinions about job will be focused on. The questions look at how participants have an opinion about whether the job is complex and difficult, freedom to carry out tasks, flexibility of work schedule, fair payment of the job, if it is interesting or not. Lastly, it also looks at personality traits variables. In HILDA Data Dictionary, the description for personality variables indicates that there is no correlation between personality variables, therefore, this analysis will analyse all of them by grouping them into the Big Five Personality Traits including Neuroticism, Extraversion, Conscientiousness, Agreeableness and Openness to Experience.
+
+Every single variable used in this analysis has scale values (ordinal scale values) including both response and input variables.
+
+The original variable names include:
+Income = qwsce
+Gender = qhgsex1
+Education = qedhigh1
+Marital Status = qmrcurr
+labour force (opinions about job) = qjomcd, qjomfd, qjomflex, qjomls, qjompf, qjomvar
+Personality = qpnbful, qpncalm, qpncless, qpncold, qpncompx, qpncoop, qpncreat, qpndeep, qpndorg, qpneffic, qpnenth, qpnenvy, qpnextro, qpnfret, qpnharsh, qpnimag, qpnineff, qpnintel, qpnjeal, qpnkind, qpnlivly, qpnmoody, qpnorder, qpnphil, qpnquiet, qpnself, qpnshy, qpnsoppy, qpnsymp, qpnsyst, qpntalk, qpntemp, qpntouch, qpntrad, qpnwarm, qpnwd.
+
+## Data Preprocessing
+HILDA datasets contain a lot of variables in different areas, only interested columns in the scope of the study will be extracted and selected to the dataframe.
+
+```{r}
+#extract interested column
+savvydata = dplyr::select(savvydata, qpddepr, qwsce, qedhigh1, qhgsex1, qmrcurr, qjomcd, qjomfd, qjomflex, qjompf,
+                   qjomvar, qpnbful, qpncalm, qpncless, qpncold, qpncompx, qpncoop, qpncreat, 
+                   qpndeep, qpndorg, qpneffic, qpnenth, qpnenvy, qpnextro, qpnfret, qpnharsh, 
+                   qpnimag, qpnineff, qpnintel, qpnjeal, qpnkind, qpnlivly, qpnmoody, qpnorder,
+                  qpnphil, qpnquiet, qpnself, qpnshy, qpnsoppy, qpnsymp, qpnsyst, qpntalk, 
+                  qpntemp, qpntouch, qpntrad, qpnwarm, qpnwd)
+```
+
+```{r}
+summary(savvydata)
+```
+
+Looking at the variable names, they are all in abbreviation which is difficult to understand. We will change variable names to more proper and understandable ones. For the 'Psychological distress - depressed' variable, I would like to use a different expression, instead of 'depressed' it will be changed to 'feeling content' instead. The value scales also need to be changed to opposite.
+
+```{r}
+savvydata = rename(savvydata, income = qwsce,
+                   feeling_content = qpddepr,
+                  highest_education = qedhigh1,
+                  gender = qhgsex1,
+                  marital_status = qmrcurr,
+                  job_difficult = qjomcd,
+                  job_freedom = qjomfd,
+                  job_flexibletime = qjomflex,
+                  job_fairpayment = qjompf,
+                  job_interesting = qjomvar,
+                  personality_bashful = qpnbful,
+                  personality_calm = qpncalm,
+                  personality_careless = qpncless,
+                  personality_cold = qpncold,
+                  personality_complex = qpncompx,
+                  personality_cooperative = qpncoop,
+                  personality_creative = qpncreat,
+                  personality_deep = qpndeep,
+                  personality_disorganised = qpndorg,
+                  personality_efficient = qpneffic,
+                  personality_enthusiastic = qpnenth,
+                  personality_envious = qpnenvy,
+                  personality_extroverted = qpnextro,
+                  personality_fretful = qpnfret,
+                  personality_harsh = qpnharsh,
+                  personality_imaginative = qpnimag,
+                  personality_inefficient = qpnineff,
+                  personality_intellectual = qpnintel,
+                  personality_jealous = qpnjeal,
+                  personality_kind = qpnkind,
+                  personality_lively = qpnlivly,
+                  personality_moody = qpnmoody,
+                  personality_orderly = qpnorder,
+                  personality_philosophical = qpnphil,
+                  personality_quiet = qpnquiet,
+                  personality_selfish = qpnself,
+                  personality_shy = qpnshy,
+                  personality_sloppy = qpnsoppy,
+                  personality_sympathetic = qpnsymp,
+                  personality_systematic = qpnsyst,
+                  personality_talkative = qpntalk,
+                  personality_temperamental = qpntemp,
+                  personality_touchy = qpntouch,
+                  personality_traditional = qpntrad,
+                  personality_warm = qpnwarm,
+                  personality_withdrawn = qpnwd)
+```
+
+```{r}
+#Change the name and order of point scales to be opposite
+savvydata$feeling_content <- factor(savvydata$feeling_content,
+                                    levels = c("All of the time", "Most of the time", "Some of the time",
+                                               "A little of the time", "None of the time"))
+levels(savvydata$feeling_content) <- c("None of the time","A little of the time","Some of the time","Most of the time","All of the time")
+```
+
+```{r}
+#summary(savvydata)
+```
+
+
+```{r}
+#is.na(savvydata)
+```
+
+Looking at the summary, we can see that there are many missing values, if we do not omit them it could result in an inaccurary or biases in the analysis. Therefore, rows that contain NA will be removed.
+
+```{r}
+savvydata = na.omit(savvydata)
+```
+
+```{r}
+dim(savvydata)
+```
+
+```{r}
+summary(savvydata)
+```
+
+The dimension of the dataframe is reduced after removing NA values. The observations are decreased from 23415 to 9171. This could be a limitation of this study and analysis in which that it might not be as representative since the population is smaller.
+
+```{r}
+head(savvydata)
+```
+
+Looking at data type from the head() fucntion, we can see that there is one inappropriate data type which is 'Income'. Income is supposed to be numeric and not factor, therefore, we will convert it to numeric.
+
+```{r}
+#CHANGE INCOME VARIABLE FROM FACTOR TO NUMERIC
+savvydata$income <- as.numeric(savvydata$income)
+
+summary(savvydata$income)
+```
+
+We also need to ensure that the categorical variables are ordinal variables because the values are likert-scale or socio economic status such as the level of education. We will use factor() function to every variable.
+
+```{r}
+#CHANGE NOMINAL FACTORS TO ORDINAL FACTORS
+#input = education varible
+savvydata$highest_education <- factor(savvydata$highest_education,
+                                      levels = c("Undetermined", "Year 11 and below", "Year 12",
+                                                 "Cert III or IV", "Adv diploma, diploma", 
+                                                 "Bachelor or honours", "Grad diploma, grad certificate",
+                                                 "Postgrad - masters or doctorate"))
+summary(savvydata$highest_education)
+```
+
+```{r}
+#input = opinion about job variables
+savvydata$job_difficult <- factor(savvydata$job_difficult,
+                                  levels = c("Strongly disagree", "2","3","4","5","6","Strongly agree"))
+
+savvydata$job_freedom <- factor(savvydata$job_freedom,
+                                  levels = c("Strongly disagree", "2","3","4","5","6","Strongly agree"))
+
+savvydata$job_flexibletime <- factor(savvydata$job_flexibletime,
+                                  levels = c("Strongly disagree", "2","3","4","5","6","Strongly agree"))
+
+savvydata$job_fairpayment <- factor(savvydata$job_fairpayment,
+                                  levels = c("Strongly disagree", "2","3","4","5","6","Strongly agree"))
+
+savvydata$job_interesting <- factor(savvydata$job_interesting,
+                                  levels = c("Strongly disagree", "2","3","4","5","6","Strongly agree"))
+```
+
+The values given are the scale from Strongly Disagree to Strongly Agree, however, it uses the ordinal number in between (2-6). Factor levels will be renamed for compatibility and readability for exploratory data analysis later.
+
+```{r}
+#rename factor levels for readability
+levels(savvydata$job_difficult) <- c("Strongly disagree","Disagree","Slightly disagree","Neutral",
+                                     "Slightly agree","Agree","Strongly agree")
+
+levels(savvydata$job_freedom) <- c("Strongly disagree","Disagree","Slightly disagree","Neutral",
+                                     "Slightly agree","Agree","Strongly agree")
+
+levels(savvydata$job_flexibletime) <- c("Strongly disagree","Disagree","Slightly disagree","Neutral",
+                                     "Slightly agree","Agree","Strongly agree")
+
+levels(savvydata$job_fairpayment) <- c("Strongly disagree","Disagree","Slightly disagree","Neutral",
+                                     "Slightly agree","Agree","Strongly agree")
+
+levels(savvydata$job_interesting) <- c("Strongly disagree","Disagree","Slightly disagree","Neutral",
+                                     "Slightly agree","Agree","Strongly agree")
+```
+
+```{r}
+summary(savvydata$marital_status)
+class(savvydata$marital_status)
+```
+
+The marital status variable has six values, this will be reduced to four values as three of them are similar and can be referred as 'separated' which are 'separated', 'divorced' and 'widowed'. The values will also be renamed.
+
+```{r}
+#Group Separated / Divorced / Widowed together in one data value
+#Rename values
+levels(savvydata$marital_status) <- c("Married", "De facto", "Separated", "Separated", "Separated", "Single")          
+summary(savvydata$marital_status)
+```
+
+Personality traits variables will be grouped into new five variables which are Big 5 Personality Traits. It will then be converted to numeric data type for average score calculation. Therefore, all scale values need to be converted to numeric value.
+
+```{r}
+#Recode all scale values to numeric value
+savvydata$personality_bashful <- recode(savvydata$personality_bashful,`Does not describe me at all`="1",
+                                        `Describes me very well` = "7")
+savvydata$personality_calm <- recode(savvydata$personality_calm,`Does not describe me at all`="1",
+                                        `Describes me very well` = "7")
+  
+savvydata$personality_careless <- recode(savvydata$personality_careless,`Does not describe me at all`="1",
+                                        `Describes me very well` = "7")
+
+savvydata$personality_cold <- recode(savvydata$personality_cold,`Does not describe me at all`="1", `Describes me very well` = "7")
+
+savvydata$personality_complex <- recode(savvydata$personality_complex,`Does not describe me at all`="1", `Describes me very well` = "7")
+
+savvydata$personality_cooperative <- recode(savvydata$personality_cooperative,`Does not describe me at all`="1", `Describes me very well` = "7")
+
+savvydata$personality_creative <- recode(savvydata$personality_creative,`Does not describe me at all`="1", `Describes me very well` = "7")
+
+savvydata$personality_deep <- recode(savvydata$personality_deep,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_disorganised <- recode(savvydata$personality_disorganised,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_efficient <- recode(savvydata$personality_efficient,`Does not describe me at all`="1", `Describes me very well` = "7")
+
+savvydata$personality_enthusiastic <- recode(savvydata$personality_enthusiastic,`Does not describe me at all`="1", `Describes me very well` = "7")
+
+savvydata$personality_envious <- recode(savvydata$personality_envious,`Does not describe me at all`="1", `Describes me very well` = "7")
+
+savvydata$personality_extroverted <- recode(savvydata$personality_extroverted,`Does not describe me at all`="1", `Describes me very well` = "7")
+
+savvydata$personality_fretful <- recode(savvydata$personality_fretful,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_harsh <- recode(savvydata$personality_harsh,`Does not describe me at all`="1", `Describes me very well` = "7")
+
+savvydata$personality_imaginative <- recode(savvydata$personality_imaginative,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_inefficient <- recode(savvydata$personality_inefficient,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_intellectual <- recode(savvydata$personality_intellectual,`Does not describe me at all`="1", `Describes me very well` = "7")
+
+savvydata$personality_jealous <- recode(savvydata$personality_jealous,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_kind <- recode(savvydata$personality_kind,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_lively <- recode(savvydata$personality_lively,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_moody <- recode(savvydata$personality_moody,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_orderly <- recode(savvydata$personality_orderly,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_philosophical <- recode(savvydata$personality_philosophical,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_quiet <- recode(savvydata$personality_quiet,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_selfish <- recode(savvydata$personality_selfish,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_shy <- recode(savvydata$personality_shy,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_sloppy <- recode(savvydata$personality_sloppy,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_sympathetic <- recode(savvydata$personality_sympathetic,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_systematic <- recode(savvydata$personality_systematic,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_talkative <- recode(savvydata$personality_talkative,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_temperamental <- recode(savvydata$personality_temperamental,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_touchy <- recode(savvydata$personality_touchy,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_traditional <- recode(savvydata$personality_traditional,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_warm <- recode(savvydata$personality_warm,`Does not describe me at all`="1", `Describes me very well` = "7")
+  
+savvydata$personality_withdrawn <- recode(savvydata$personality_withdrawn,`Does not describe me at all`="1", `Describes me very well` = "7")
+```
+
+```{r}
+#Convert to numeric values
+savvydata$personality_bashful <- as.numeric(savvydata$personality_bashful)
+savvydata$personality_calm <- as.numeric(savvydata$personality_calm)
+savvydata$personality_careless <- as.numeric(savvydata$personality_careless)
+savvydata$personality_cold <- as.numeric(savvydata$personality_cold)
+savvydata$personality_complex <- as.numeric(savvydata$personality_complex)
+savvydata$personality_cooperative <- as.numeric(savvydata$personality_cooperative)
+savvydata$personality_creative <- as.numeric(savvydata$personality_creative)
+savvydata$personality_deep <- as.numeric(savvydata$personality_deep)
+savvydata$personality_disorganised <- as.numeric(savvydata$personality_disorganised)
+savvydata$personality_efficient <- as.numeric(savvydata$personality_efficient)
+savvydata$personality_enthusiastic <- as.numeric(savvydata$personality_enthusiastic)
+savvydata$personality_envious <- as.numeric(savvydata$personality_envious)
+savvydata$personality_extroverted <- as.numeric(savvydata$personality_extroverted)
+savvydata$personality_fretful <- as.numeric(savvydata$personality_fretful)
+savvydata$personality_harsh <- as.numeric(savvydata$personality_harsh)
+savvydata$personality_imaginative <- as.numeric(savvydata$personality_imaginative)
+savvydata$personality_inefficient <- as.numeric(savvydata$personality_inefficient)
+savvydata$personality_intellectual <- as.numeric(savvydata$personality_intellectual)
+savvydata$personality_jealous <- as.numeric(savvydata$personality_jealous)
+savvydata$personality_kind <- as.numeric(savvydata$personality_kind)
+savvydata$personality_lively <- as.numeric(savvydata$personality_lively)
+savvydata$personality_moody <- as.numeric(savvydata$personality_moody)
+savvydata$personality_orderly <- as.numeric(savvydata$personality_orderly)
+savvydata$personality_philosophical <- as.numeric(savvydata$personality_philosophical)
+savvydata$personality_quiet <- as.numeric(savvydata$personality_quiet)
+savvydata$personality_selfish <- as.numeric(savvydata$personality_selfish)
+savvydata$personality_shy <- as.numeric(savvydata$personality_shy)
+savvydata$personality_sloppy <- as.numeric(savvydata$personality_sloppy)
+savvydata$personality_sympathetic <- as.numeric(savvydata$personality_sympathetic)
+savvydata$personality_systematic <- as.numeric(savvydata$personality_systematic)
+savvydata$personality_talkative <- as.numeric(savvydata$personality_talkative)
+savvydata$personality_temperamental <- as.numeric(savvydata$personality_temperamental)
+savvydata$personality_touchy <- as.numeric(savvydata$personality_touchy)
+savvydata$personality_traditional <- as.numeric(savvydata$personality_traditional)
+savvydata$personality_warm <- as.numeric(savvydata$personality_warm)
+savvydata$personality_withdrawn <- as.numeric(savvydata$personality_withdrawn)
+```
+
+Personality variables will be put into the new variable (Big Five) in which they belong. It will then be calculated for average score.
+From the research, personality items that belong to the Neuroticism variable include 'envious', 'fretful', 'jealous', 'moody', 'temperamental', 'touchy' and 'calm'.
+Personality items that belong to the Extraversion variable include 'bashful', 'extroverted', 'quiet', 'shy', 'talkative', 'withdrawn', 'enthusiastic' and 'lively'.
+Personality items that belong to the Conscientiousness variable include 'careless', 'disorganised', 'efficient', 'inefficient', 'sloppy', 'systematic', 'orderly' and 'traditional'.
+Personality items that belong to the Agreeableness variable include 'cold', 'cooperative', 'harsh', 'kind', 'sympathetic', 'warm' and 'selfish'.
+Personality items that belong to the Openness to Experience variable include 'complex', 'creative', 'deep', 'imaginative', 'intellectual' and 'philosophical'.
+
+For each of the five traits, there are inconsistent values or antonyms such as efficient and inefficient, talkative and quiet and etc. and thus when we calculate the average score, we could not add up all of them as some will give positive effects and some give negative effects. For example, in the Agreeableness factor, being sympathetic would give a positive effect to Agreeableness whereas being selfish would give a negative effect.
+
+According to The International Personality Item Pool (IPIP) system, the reason behind the inconsistent scale values is that it encourages respondents to pay close attention to the content of items and therefore increases the probability of valid responding. If items from the same scale are listed together, especially if they are all +keyed or -keyed items, respondents may be more likely to see that the items are measuring the same construct. If this happens, instead of giving more differentiated ratings (from Very Inaccurate through Very Accurate), they might tend to give the exact same response (e.g., Very Accurate) to all of the items.
+
+```{r}
+#Group personality variables into Big Five Personality Traits and calculate average score
+savvydata$Neuroticism <- (((savvydata$personality_envious + savvydata$personality_fretful + savvydata$personality_jealous + savvydata$personality_moody + savvydata$personality_temperamental + savvydata$personality_touchy) / 6) - savvydata$personality_calm) / 2
+
+savvydata$Extraversion <- (- savvydata$personality_bashful + savvydata$personality_extroverted - savvydata$personality_quiet - savvydata$personality_shy + savvydata$personality_talkative - savvydata$personality_withdrawn + savvydata$personality_enthusiastic + savvydata$personality_lively) / 8
+
+savvydata$Conscientiousness <- (- savvydata$personality_careless - savvydata$personality_disorganised + savvydata$personality_efficient - savvydata$personality_inefficient - savvydata$personality_sloppy + savvydata$personality_systematic + savvydata$personality_orderly + savvydata$personality_traditional) / 8
+
+savvydata$Agreeableness <- (((savvydata$personality_cooperative + savvydata$personality_kind + savvydata$personality_sympathetic + savvydata$personality_warm) / 4) + ((- savvydata$personality_cold - savvydata$personality_harsh - savvydata$personality_selfish) / 3))/ 2
+  
+ 
+savvydata$OpennessToExperience <- (((savvydata$personality_creative + savvydata$personality_imaginative + savvydata$personality_deep + savvydata$personality_intellectual + savvydata$personality_philosophical) / 5) - savvydata$personality_complex) / 2
+```
+
+```{r}
+summary(savvydata$Neuroticism)
+```
+
+```{r}
+summary(savvydata$Extraversion)
+```
+
+```{r}
+summary(savvydata$Conscientiousness)
+```
+
+```{r}
+summary(savvydata$Agreeableness)
+```
+
+```{r}
+summary(savvydata$OpennessToExperience)
+```
+
+The original scale values from 1-7 indicate as follows:
+1 = does not describe me at all 
+2 = mostly does not describe me
+3 = somewhat does not describe me
+4 = neutral
+5 = somewhat describe me
+6 = mostly describe me 
+7 = describe me very well
+
+However, when calculated considering +keyed and -keyed. The minimum, median, mean and maximum values vary. This will be explored in the Exploratory Data Analysis process.
+
+## Exploratory Data Analysis
+In order to understand the dataset, initial investigations on the interested columns will be performed by utilizing exploratory data analysis to discover patterns and check assumptions. With the help of summary statistics and visuliasations, we will gain more understanding about the dataset and the variables we are interested in. Hypothese can be made during this process.
+
+```{r}
+#distribution of self-reported happiness
+ggplot(savvydata, aes(savvydata$feeling_content, fill = savvydata$feeling_content))+
+  geom_bar()+
+  labs(title = "Self-Reported Happiness: Feeling Content", x = "", fill= "Frequency")+
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_fill_brewer(palette = "Set3")+
+  scale_y_continuous(breaks=c(0,500,1000,1500,2000,2500,3000,3500,
+                              4000,4500,5000,5500))+
+  theme_minimal()
+
+```
+
+Looking at 'Self-Reported Happiness: Feeling Content', we can see that out of 9171 observations, around almost 5500 observations have reported to 'All of the time' for feeling content (or None of the time for feeling depressed), which is much greater than those who reported 'None of the time' for feeling happy (84 observations). This can be a limitation of the study as it is imbalanced classes.
+
+```{r}
+#distribution of income
+ggplot(savvydata, aes(x = income)) + 
+  geom_histogram(alpha = 0.5, position = "identity",
+                 color = "steelblue4", fill = "slategray2")+
+  labs(title = "Distribution of Income", x = "Weekly Income (AUD)", y = "Frequency")+
+  theme_light()
+```
+
+```{r}
+summary(savvydata$income)
+```
+
+The visualisation of Income distribution shows that about almost 10% (877 observations) reported weekly income to be zero and the average weekly income ranges around AUD810, whereas the maximum weekly income is AUD1961.
+
+```{r}
+#distribution of gender
+ggplot(savvydata, aes(savvydata$gender, fill = savvydata$gender))+
+  geom_bar()+
+  labs(title = "Distribution of Gender", x = "", fill= "Frequency")+
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_fill_brewer(palette = "Paired")+
+  scale_y_continuous(breaks=c(0,1000,2000,3000,4000,5000))+
+  theme_minimal()
+
+```
+
+The distribution of gender shows almost equal numbers for male and female respondents.
+
+```{r}
+#distribution of education levels
+ggplot(savvydata, aes(savvydata$highest_education, fill = savvydata$highest_education))+
+  geom_bar()+
+  labs(title = "Highest Education Achieved", x = "", fill= "Levels of Education")+
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_fill_brewer(palette = "Pastel2")+
+  scale_y_continuous(breaks=c(0,500,1000,1500,2000,2500))+
+  theme_minimal()
+
+```
+
+```{r}
+summary(savvydata$highest_education)
+```
+
+For highest education achieved, the barplot shows that most of the respondants reported having completed Cert III or IV (2207 observations or 24%), followed by Bachelor or honours degree (1741 observations or 19%), whereas Graduation diploma and graduate certificate qualifications account for the smallest number (652 observations or 7%).
+
+```{r}
+#distribution of marital status
+ggplot(savvydata, aes(savvydata$marital_status, fill = savvydata$marital_status))+
+  geom_bar()+
+  labs(title = "Distribution of Marital Status", x = "", fill= "Marital Status")+
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_fill_brewer(palette = "Pastel1")+
+  scale_y_continuous(breaks=c(0,1000,2000,3000,4000,5000))+
+  theme_minimal()
+```
+
+```{r}
+summary(savvydata$marital_status)
+```
+
+The distribution of marital status indicates that almost 50% of the respondents have reported that they are legally married. There are about 20% for respondents who are in a De Facto relationship, 8% for those who are separated and 23% for those who are single.
+
+```{r}
+#Psychological Well-Being in regards to Weekly Income
+wellbeing_income <- ggplot(data=savvydata, aes(y=feeling_content, x = income))+
+  geom_boxplot(alpha=0.3, fill = "lightblue3", color = "lightblue4")+
+  labs(y="Feeling Content", x = "Income Per Week")+
+  ggtitle("Psychological Well-Being in regards to Weekly Income")+
+  theme_minimal()
+plot(wellbeing_income)
+```
+
+From the visualisation above, there seems to be a relationship between weekly income and psychological well-being. In this case, the more weekly income is the rate of happiness also tends to increase.
+
+```{r}
+require(scales)
+```
+
+```{r}
+#summary of Psychological Well-Being in regards to Gender
+plotdata <- savvydata%>%
+  group_by(feeling_content, gender) %>%
+  summarise(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = scales::percent(pct))
+#plot 
+ggplot(plotdata, 
+       aes(x = factor(feeling_content,
+                      levels = c("None of the time","A little of the time","Some of the time",
+                                 "Most of the time","All of the time")),
+           y = pct,
+           fill = factor(gender, 
+                         levels = c("Male","Female"))))+
+
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = lbl), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "PuBuGn") +
+  labs(y = "Percent", 
+       fill = "Gender",
+       x = "Feeling Content",
+       title = "Psychological Well-Being in regards to Gender") +
+  theme_minimal()
+```
+
+The plot of Psychological Well-Being in regards to Gender does not show a remarkable pattern but we can see that the percentage for 'All of the time' feeling content for male is slightly higher at 52.1% compared to female at 47.9%, whereas for 'None of the time' feeling content, the percentage of female is higher at 56% compared to male at 44%.
+
+```{r}
+#summary of Psychological Well-Being in regards to Levels of Education achieved
+plotdata <- savvydata%>%
+  group_by(feeling_content, highest_education) %>%
+  summarise(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = scales::percent(pct))
+#plot 
+ggplot(plotdata, 
+       aes(x = factor(feeling_content,
+                      levels = c("None of the time","A little of the time","Some of the time",
+                                 "Most of the time","All of the time")),
+           y = pct,
+           fill = factor(highest_education, 
+                         levels = c("Undetermined","Year 11 and below ","Year 12", "Cert III or IV",
+                                    "Adv diploma, diploma", "Bachelor or honours","Grad diploma, grad certificate","Postgrad - masters or doctorate"))))+
+
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = lbl), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "BuPu") +
+  labs(y = "Percent", 
+       fill = "Levels of Education Achieved",
+       x = "Feeling Content",
+       title = "Psychological Well-Being in regards to Education") +
+  theme_minimal()
+```
+
+The plot of Psychological Well-Being in regards to Levels of Education achieved demonstrates no obvious relationship and pattern. It seems that for every feeling content scale, the percentage is higher for respondents who have achieved Cert III or IV.
+
+```{r}
+#summary of Psychological Well-Being in regards to Marital Status
+plotdata <- savvydata%>%
+  group_by(feeling_content, marital_status) %>%
+  summarise(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = scales::percent(pct))
+#plot 
+ggplot(plotdata, 
+       aes(x = factor(feeling_content,
+                      levels = c("None of the time","A little of the time","Some of the time",
+                                 "Most of the time","All of the time")),
+           y = pct,
+           fill = factor(marital_status, 
+                         levels = c("Married","De facto","Separated", "Single"))))+
+
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = lbl), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "YlGnBu") +
+  labs(y = "Percent", 
+       fill = "Marital Status",
+       x = "Feeling Content",
+       title = "Psychological Well-Being in regards to Marital Status") +
+  theme_minimal()
+```
+
+The plot of Psychological Well-Being in regards to Marital Status shows that people who are married seem to be the happiest (53.50%) whereas those who are single have reported mostly for 'None of the time' feeling content (45.2%).
+
+```{r}
+#summary of Psychological Well-Being in regards to Job Difficulty
+plotdata <- savvydata%>%
+  group_by(feeling_content, job_difficult) %>%
+  summarise(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = scales::percent(pct))
+#plot 
+ggplot(plotdata, 
+       aes(x = factor(feeling_content,
+                      levels = c("None of the time","A little of the time","Some of the time",
+                                 "Most of the time","All of the time")),
+           y = pct,
+           fill = factor(job_difficult, 
+                         levels = c("Strongly disagree","Disagree","Slightly disagree","Neutral",
+                                     "Slightly agree","Agree","Strongly agree"))))+
+
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = lbl), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(y = "Percent", 
+       fill = "My job is difficult",
+       x = "Feeling Content",
+       title = "Psychological Well-Being in regards to Job Difficulty") +
+  theme_minimal()
+```
+
+The plot of psychological well-being in regards to job difficulty demonstrates relatively mixed patterns, that is respondents strongly agreeing that the job is difficult tend to report the most on 'None of the time' to feeling content (18%) and gradually decreasing as the scale changes from 'A little of the time' (10%), 'Some of the time' (8.79%), 'Most of the time' (9.14%) and 'All of the time' (9%). However, if we look at the scale 'Strongly disagree' to job difficulty, the percentage from 'All of the time' (12%) to 'None of the time' (19%) does not go exactly in descending order. 
+
+```{r}
+#summary of Psychological Well-Being in regards to Job Freedom
+plotdata <- savvydata%>%
+  group_by(feeling_content, job_freedom) %>%
+  summarise(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = scales::percent(pct))
+#plot 
+ggplot(plotdata, 
+       aes(x = factor(feeling_content,
+                      levels = c("None of the time","A little of the time","Some of the time",
+                                 "Most of the time","All of the time")),
+           y = pct,
+           fill = factor(job_freedom, 
+                         levels = c("Strongly disagree","Disagree","Slightly disagree","Neutral",
+                                     "Slightly agree","Agree","Strongly agree"))))+
+
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = lbl), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "Set3") +
+  labs(y = "Percent", 
+       fill = "I have freedom to decide how I do my own work",
+       x = "Feeling Content",
+       title = "Psychological Well-Being in regards to Job Freedom") +
+  theme_minimal()
+```
+
+The plot of psychological well-being in regards to job freedom illustrates that for respondents, who strongly disagreed that they have freedom to decide how they do their own work, reported most on 'None of the time' for feeling content (15%). The percentage gradually decreased as the opinion towards job freedom changes, that is respondents who strongly disagreed that they have freedom tend to report the least for 'All of the time' for feeling content (5.12%).
+
+```{r}
+#summary of Psychological Well-Being in regards to Work Schedule Flexibility
+plotdata <- savvydata%>%
+  group_by(feeling_content, job_flexibletime) %>%
+  summarise(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = scales::percent(pct))
+#plot 
+ggplot(plotdata, 
+       aes(x = factor(feeling_content,
+                      levels = c("None of the time","A little of the time","Some of the time",
+                                 "Most of the time","All of the time")),
+           y = pct,
+           fill = factor(job_flexibletime, 
+                         levels = c("Strongly disagree","Disagree","Slightly disagree","Neutral",
+                                     "Slightly agree","Agree","Strongly agree"))))+
+
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = lbl), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "PiYG") +
+  labs(y = "Percent", 
+       fill = "My working time can be flexible",
+       x = "Feeling Content",
+       title = "Psychological Well-Being in regards to Work Schedule Flexibility") +
+  theme_minimal()
+```
+
+The plot of psychological well-being in regards to work schedule flexibility demonstrates quite a mixed pattern also, that is, respondents who strongly disagreed that their work schedule is flexible seems to be the least happy as 30% of them reported 'None of the time' to feeling content, followed by 17%, 14.64% and 13.81% who reported 'A little of the time', 'Some of the time' and 'Most of the time' to feeling content, respectively. However, the percentage increases at the scale 'All of the time' at 15%
+
+```{r}
+#summary of Psychological Well-Being in regards to Fair Payment of Wages
+plotdata <- savvydata%>%
+  group_by(feeling_content, job_fairpayment) %>%
+  summarise(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = scales::percent(pct))
+#plot 
+ggplot(plotdata, 
+       aes(x = factor(feeling_content,
+                      levels = c("None of the time","A little of the time","Some of the time",
+                                 "Most of the time","All of the time")),
+           y = pct,
+           fill = factor(job_fairpayment, 
+                         levels = c("Strongly disagree","Disagree","Slightly disagree","Neutral",
+                                     "Slightly agree","Agree","Strongly agree"))))+
+
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = lbl), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "PRGn") +
+  labs(y = "Percent", 
+       fill = "I get paid fairly for the things I do in my job",
+       x = "Feeling Content",
+       title = "Psychological Well-Being in regards to Fair Payment of Wages") +
+  theme_minimal()
+```
+
+The plot of psychological well-being in regards to fair payment of wages shows that there seems to be a positive relationship between fair payment of wages and feeling content. In this case, if we look at the 'All of the time' feeling content scale, we can see that there seems to be more percentage of respondents who strongly agreed (13.1%), agreed (26.4%) and slightly agree (23.8%) than those who disagreed. Furthermore, if we look at 'Strongly disagree' scale for all 'Feeling Content' scale values we can see that there is an obvious descent of percentage from 'None of the time' (19%) to 'All of the time' (3.5%).
+
+```{r}
+#summary of Psychological Well-Being in regards to Interest Levels in the Job
+plotdata <- savvydata%>%
+  group_by(feeling_content, job_interesting) %>%
+  summarise(n = n()) %>% 
+  mutate(pct = n/sum(n),
+         lbl = scales::percent(pct))
+#plot 
+ggplot(plotdata, 
+       aes(x = factor(feeling_content,
+                      levels = c("None of the time","A little of the time","Some of the time",
+                                 "Most of the time","All of the time")),
+           y = pct,
+           fill = factor(job_interesting, 
+                         levels = c("Strongly disagree","Disagree","Slightly disagree","Neutral",
+                                     "Slightly agree","Agree","Strongly agree"))))+
+
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_y_continuous(breaks = seq(0, 1, .2), 
+                     label = percent) +
+  geom_text(aes(label = lbl), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  scale_fill_brewer(palette = "Pastel1") +
+  labs(y = "Percent", 
+       fill = "My job provides me with a variety of interesting things to do",
+       x = "Feeling Content",
+       title = "Psychological Well-Being in regards to Interest Levels in the Job") +
+  theme_minimal()
+```
+
+The plot of psychological well-being in regards to interest levels in the job shows that respondents who strongly disagreed that their job is interesting reported the most on 'None of the time' for feeling content (18%) and the least on 'All of the time' for feeling content.
+
+```{r}
+#Psychological Well-Being in regards to Neuroticism
+wellbeing_emotional <- ggplot(data=savvydata, aes(y=feeling_content, x = Neuroticism, fill = savvydata$feeling_content))+
+  geom_boxplot(alpha=0.3)+
+  scale_fill_manual(breaks = savvydata$feeling_content,
+                    values = c("cyan4","red","pink", "mediumpurple", "darkgoldenrod1"))+
+  labs(y="Feeling Content", x = "Neuroticism", fill = "Feeling Content")+
+  ggtitle("Psychological Well-Being in regards to Neuroticism")+
+  scale_x_continuous(breaks=c(-4,-3,-2,-1,0,1,2,3,4))+
+  theme_minimal()
+plot(wellbeing_emotional)
+```
+
+The boxplot of Psychological Well-Being in regards to Neuroticism shows that those who reported 'None of the time' feeling content tend to score higher for Neuroticism, whereas those who reported 'All of the time' feeling content evidently scored low for Neuroticism (with the average being lower than -1 on the scale). In other words, those who scored high in neuroticism tend to be less happy and those who scored less in neuroticism are happier.
+
+```{r}
+#Psychological Well-Being in regards to Extraversion
+wellbeing_extraversion <- ggplot(data=savvydata, aes(y=feeling_content, x = Extraversion, fill = savvydata$feeling_content))+
+  geom_boxplot(alpha=0.3)+
+  scale_fill_manual(breaks = savvydata$feeling_content,
+                    values = c("cyan4","red","pink", "mediumpurple", "darkgoldenrod1"))+
+  labs(y="Feeling Content", x = "Extraversion", fill = "Feeling Content")+
+  ggtitle("Psychological Well-Being in regards to Extraversion")+
+  scale_x_continuous(breaks=c(-5,-4,-3,-2, -1,0,1,2,3,4,5,6,7))+
+  theme_minimal()
+plot(wellbeing_extraversion)
+```
+
+The boxplot of Psychological Well-Being in regards to Extraversion shows that those who have reported 'All of the time' feeling content seem to be extrovert. The level of extraversion also gradually decreases as the frequency of happiness decreases, except for 'None of the time' feeling content that shows a slightly higher level of Extraversion than 'A little of the time'.
+
+```{r}
+#Psychological Well-Being in regards to Conscientiousness
+wellbeing_con <- ggplot(data=savvydata, aes(y=feeling_content, x = Conscientiousness, fill = savvydata$feeling_content))+
+  geom_boxplot(alpha=0.3)+
+  scale_fill_manual(breaks = savvydata$feeling_content,
+                    values = c("cyan4","red","pink", "mediumpurple", "darkgoldenrod1"))+
+  labs(y="Feeling Content", x = "Conscientiousness", fill = "Feeling Content")+
+  ggtitle("Psychological Well-Being in regards to Conscientiousness")+
+  scale_x_continuous(breaks=c(-4,-3,-2,-1,0,1,2,3,4,5,6,7))+
+  theme_minimal()
+plot(wellbeing_con)
+```
+
+The boxplot of Psychological Well-Being in regards to Conscientiousness shows that respondents who scored higher in Conscientiousness are happier.
+
+```{r}
+#Psychological Well-Being in regards to Agreeableness
+wellbeing_agree <- ggplot(data=savvydata, aes(y=feeling_content, x = Agreeableness, fill = savvydata$feeling_content))+
+  geom_boxplot(alpha=0.3)+
+  scale_fill_manual(breaks = savvydata$feeling_content,
+                    values = c("cyan4","red","pink", "mediumpurple", "darkgoldenrod1"))+
+  labs(y="Feeling Content", x = "Agreeableness", fill = "Feeling Content")+
+  ggtitle("Psychological Well-Being in regards to Agreeableness")+
+  scale_x_continuous(breaks=c(-4,-3,-2,-1,0,1,2,3))+
+  theme_minimal()
+plot(wellbeing_agree)
+```
+
+The boxplot of Psychological Well-Being in regards to Agreeableness shows that respondents who scored higher in Agreeableness are happier.
+
+```{r}
+#Psychological Well-Being in regards to Openness to Experience
+wellbeing_open <- ggplot(data=savvydata, aes(y=feeling_content, x = OpennessToExperience, fill = savvydata$feeling_content))+
+  geom_boxplot(alpha=0.3)+
+  scale_fill_manual(breaks = savvydata$feeling_content,
+                    values = c("cyan4","red","pink", "mediumpurple", "darkgoldenrod1"))+
+  labs(y="Feeling Content", x = "Openness to Experience", fill = "Feeling Content")+
+  ggtitle("Psychological Well-Being in regards to Openness to Experience")+
+  scale_x_continuous(breaks=c(-4,-3,-2,-1,0,1,2,3,4))+
+  theme_minimal()
+plot(wellbeing_open)
+```
+
+The boxplot of Psychological Well-Being in regards to Openness to Experience shows that respondents who scored higher in Openness to Experience are happier.
+
+The hypothese to analyze the factors contributing to psychological well-being and the relationship between input variables and target variable are as follows:
+
+Null Hypothesis H0 : There is no association between any input variables and target variable, meaning that there is no relationship between psychological well-being and observed factors.
+H1 : Personality traits have a stronger influence on psychological well-being than external factors
+H2 : Higher income increases happiness
+H3 : Married people are happier than people of other marital status
+H4 : The personality trait neuroticism is negatively associated with psychological well-being.
+H5 : The personality trait extraversion is positively associated with psychological well-being.
+H6 : The personality trait conscientiousness is positively associated with psychological well-being.
+H7 : The personality trait agreeableness is positively associated with psychological well-being.
+H8 : The personality trait openness to experience is positively associated with psychological well-being.
+
+## Model Construction
+Next the models will be fit.
+Train and test data will be splited into 70% for training and 30% for testing for models evaluation.
+
+```{r}
+library(caret)
+intrain <- createDataPartition(y = savvydata$feeling_content, p =0.7, list = FALSE)
+training <- savvydata[intrain,]
+testing <- savvydata[-intrain,]
+
+dim(training)
+dim(testing)
+```
+
+There will be a total of three models including one with only external factors, one with only Big Five Personality factors and the other one is the combination of both external factors and personality traits. The first two models will be compared to test the hypothesis 'H01 : Personality traits have a stronger influence on psychological well-being than external factors'. The best model of all three will be selected to interpret how the observed factors influence psychological well-being.
+
+
+#### Model 1
+The first model will be external factor variables (with out personality traits) to measure how well it predicts the psychological well-being or happiness.
+
+```{r}
+# Model 1 - External Factors
+fit_external <- vglm(feeling_content ~ income + highest_education + gender + marital_status + job_difficult + job_freedom + job_flexibletime + job_fairpayment + job_interesting, cumulative(parallel=TRUE),data=training)
+
+summary(fit_external)
+```
+
+Stepwise regression uses statistical significance to select variables to be used in regression models.
+
+```{r}
+#stepwise regression
+stepwise <- step4(fit_external)
+summary(stepwise)
+```
+
+Models with the lowest AIC will be chosen because the lower AIC indicates that the model fits the data better. In this case, we have the lowest AIC of 13083.25 in which the equation is:
+
+vglm(formula = feeling_content ~ income + marital_status + job_difficult + 
+    job_fairpayment + job_interesting, family = cumulative(parallel = TRUE), 
+    data = training)
+
+After stepwise regression, non-significant variables are removed including gender, highest_education, job_flexibletime and job_freedom
+
+Next the ordinal logistic regression will be fit to build the proportional odds logistic regression to predict the class of multi-class ordered variables.
+
+```{r}
+#Polr
+fitpolr_external <- polr(feeling_content ~ income + marital_status + job_difficult +
+    job_fairpayment + job_interesting, data = training, Hess = TRUE)
+summary(fitpolr_external)
+```
+
+We will again check p-value to see if there are any non-significant variables that do not need interpretation.
+
+```{r}
+# p-Value Calculation
+(ctable <- coef(summary(fitpolr_external)))
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+(ctable <- cbind(ctable, "p value" = p))
+```
+
+job_fairpaymentDisagree is not statistically significant after stepwise regression (p value < 0.05)
+
+The coefficients from the model can be difficult to interpret because they are scaled in terms of logs. To interpret logistic regression models, we can convert the coefficients into odds ratios.
+
+```{r}
+ci <- confint.default(fitpolr_external)
+exp(cbind(OR = coef(fitpolr_external), ci))
+```
+
+Check predicted performance for Model 1
+
+```{r}
+# Predicted performance - Training
+pred_train <- predict(fitpolr_external, training)
+tab_train <- table(pred_train, training$feeling_content)
+print(tab_train)
+```
+
+```{r}
+table(pred_train, training$feeling_content) %>%
+  prop.table() %>% round(digits = 3)
+```
+
+```{r}
+#confusion matrix
+confusionMatrix(pred_train, training$feeling_content,
+                positive = "pos")
+```
+
+Looking at the sensitivity from the confusion matrix, we can see that the class 'None of the time', 'A little of the time', 'Some of the time' has 0% for detecting events in the positive class. In other words, they are not appropriately detected. However, for 'Most of the time' class, only about 3.6% of the 'Most of the time' response in the dataset were correctly predicted as 'Most of the time' class. 'All of the time' was the most accurately predicted class of 98.1%. This could be a result of a class imbalance. If we look at plot of the distribution of self-reported feeling content below, we can see that the classes are not represented equally. There is a big difference between them with the classes, for example 'All of the time' class takes up almost 60% of the datasets whereas there is only 0.9% 'None of the time'.
+
+```{r}
+#distribution of self-reported happiness
+ggplot(savvydata, aes(savvydata$feeling_content, fill = savvydata$feeling_content))+
+  geom_bar()+
+  labs(title = "Self-Reported Happiness: Feeling Content", x = "", fill= "Frequency")+
+  scale_x_discrete(guide = guide_axis(angle = 45 ))+
+  scale_fill_brewer(palette = "Set3")+
+  scale_y_continuous(breaks=c(0,500,1000,1500,2000,2500,3000,3500,
+                              4000,4500,5000,5500))+
+  theme_minimal()
+```
+
+```{r}
+# misclassified observations
+mean(as.character(training$feeling_content) != as.character(pred_train))
+```
+
+```{r}
+# accuracy / correctly classified
+(CCR <- sum(diag(tab_train)) / sum(tab_train))
+```
+
+For the training model of model 1 , there is 59% accuracy and 41% of misclassified observations.
+
+```{r}
+#Predicted Performance - Testing
+pred_test <- predict(fitpolr_external, testing)
+tab_test <- table(pred_test, testing$feeling_content)
+print(tab_test)
+```
+
+```{r}
+table(pred_test, testing$feeling_content) %>%
+  prop.table() %>% round(digits = 3)
+```
+
+```{r}
+#confusion matrix
+confusionMatrix(pred_test, testing$feeling_content,
+                positive = "pos")
+```
+
+Similar to the training set, the sensitivity from the confusion matrix indicates that 0% was observed in detecting events for 'None of the time', 'A little of the time' and 'Some of the time' class. There is about 2.8% of the 'Most of the time' response in the dataset were correctly predicted as 'Most of the time' class. For 'All of the time', there is 98.5% of the 'All of the time' response that were correctly predicted as 'All of the time'.
+
+```{r}
+#misclassified observations
+mean(as.character(testing$feeling_content) != as.character(pred_test))
+```
+
+```{r}
+#accuracy / correctly classified
+(CCR <- sum(diag(tab_test)) / sum(tab_test))
+```
+
+For the testing model of Model 1, there is 59% accuracy and 41% of misclassified observations.
+
+
+#### Model 2 - Big5
+The second model will be Big Five Personality trait variables only to measure how well it predicts the psychological well-being or happiness. 
+
+```{r}
+# Model 2 - Big5
+fit_Big5 <- vglm(feeling_content ~ Neuroticism + Extraversion + Conscientiousness + Agreeableness + OpennessToExperience, cumulative(parallel=TRUE),data=training)
+summary(fit_Big5)
+```
+
+```{r}
+stepwise <- step4(fit_Big5)
+summary(stepwise)
+```
+
+Models with the lowest AIC will be chosen because the lower AIC indicates that the model fits the data better. In this case, we have the lowest AIC of 12175.1 in which the equation is:
+
+vglm(formula = feeling_content ~ Neuroticism + Extraversion + 
+    Conscientiousness + Agreeableness + OpennessToExperience, 
+    family = cumulative(parallel = TRUE), data = training)
+
+After stepwise regression, no variables were removed.
+
+Next the ordinal logistic regression will be fit to build the proportional odds logistic regression to predict the class of multi-class ordered variables.
+
+```{r}
+#polr Big 5
+fitpolr_Big5 <- polr(feeling_content ~ Neuroticism + Extraversion + 
+    Conscientiousness + Agreeableness + OpennessToExperience, data = training, Hess = TRUE)
+summary(fitpolr_Big5)
+```
+
+```{r}
+# p-Value Calculation
+(ctable <- coef(summary(fitpolr_Big5)))
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+(ctable <- cbind(ctable, "p value" = p))
+```
+
+```{r}
+# convert the coefficients into odds ratios.
+ci <- confint.default(fitpolr_Big5)
+exp(cbind(OR = coef(fitpolr_Big5), ci))
+```
+
+Check predicted performance for Model 2
+
+```{r}
+# Predicted Performance for training model
+pred_train_Big5 <- predict(fitpolr_Big5, training)
+tab_train <- table(pred_train_Big5, training$feeling_content)
+print(tab_train)
+```
+
+```{r}
+table(pred_train_Big5, training$feeling_content) %>%
+  prop.table() %>% round(digits = 3)
+```
+
+```{r}
+#confusion matrix
+confusionMatrix(pred_train_Big5, training$feeling_content,
+                positive = "pos")
+```
+
+Looking at the sensitivity from the confusion matrix, we can see that the class 'None of the time' has 0% for detecting events in the positive class. In other words, it is not appropriately detected. There is about 1.4%, 4% and 21.1% for the class 'A little of the time', 'Some of the time' and 'Most of the time', respectively that were correctly predicted for their own class. 'All of the time' was the most accurately predicted class which is 91.3%. This could be a result of a class imbalance.
+
+```{r}
+#misclassified observations
+mean(as.character(training$feeling_content) != as.character(pred_train_Big5))
+```
+
+```{r}
+#accuracy
+(CCR <- sum(diag(tab_train)) / sum(tab_train))
+```
+
+For the training model of Model 2, there is 60% accuracy and 40% of misclassified observations.
+
+```{r}
+# Predicted Performance for testing
+pred_test_Big5 <- predict(fitpolr_Big5, testing)
+tab_test <- table(pred_test_Big5, testing$feeling_content)
+print(tab_test)
+```
+
+```{r}
+table(pred_test_Big5, testing$feeling_content) %>%
+  prop.table() %>% round(digits = 3)
+```
+
+```{r}
+# confusion matrix
+confusionMatrix(pred_test_Big5, testing$feeling_content,
+                positive = "pos")
+```
+
+Looking at the sensitivity from the confusion matrix, we can see that the class 'None of the time' and 'A little of the time' have 0% for detecting events in the positive class. In other words, they are not appropriately detected. There is about 2.5% and 21.9% for the class 'Some of the time' and 'Most of the time', respectively that were correctly predicted for their own class. 'All of the time' was the most accurately predicted class which is 92.1%. This could be a result of a class imbalance.
+
+```{r}
+#misclassified observations
+mean(as.character(testing$feeling_content) != as.character(pred_test_Big5))
+```
+
+```{r}
+#accuracy / correctly classified
+(CCR <- sum(diag(tab_test)) / sum(tab_test))
+```
+
+For the testing model of Model 2, there is 61% accuracy and 39% of misclassified observations.
+
+
+#### Model 3 - Combination of External Factors and Big5
+
+The final model will be the combination of both external factors variables and Big Five Personality traits variables.
+
+```{r}
+fit_combine <- vglm(feeling_content ~ income + highest_education + gender + marital_status + job_difficult + job_freedom + job_flexibletime + job_fairpayment + job_interesting + Neuroticism + Extraversion + Conscientiousness + Agreeableness + OpennessToExperience, cumulative(parallel=TRUE),data=training)
+summary(fit_combine)
+```
+
+Stepwise regression uses statistical significance to select variables to be used in regression models.
+
+```{r}
+stepwise <- step4(fit_combine)
+summary(stepwise)
+```
+
+Models with the lowest AIC will be chosen because the lower AIC indicates that the model fits the data better. In this case, we have the lowest AIC of 11997.6 in which the equation is:
+
+vglm(formula = feeling_content ~ income + marital_status + job_difficult + 
+    job_fairpayment + job_interesting + Neuroticism + Extraversion + 
+    Conscientiousness + Agreeableness + OpennessToExperience, 
+    family = cumulative(parallel = TRUE), data = training)
+    
+After stepwise regression, non-significant variables are removed including gender, highest_education, job_freedom and job_flexibletime.
+
+Next the ordinal logistic regression will be fit to build the proportional odds logistic regression to predict the class of multi-class ordered variables.
+
+```{r}
+#polr
+fitpolr_combine <- polr(feeling_content ~ income + marital_status + job_difficult + 
+    job_fairpayment + job_interesting + Neuroticism + 
+    Extraversion + Conscientiousness + Agreeableness + OpennessToExperience, data = training, Hess = TRUE)
+summary(fitpolr_combine)
+```
+
+```{r}
+# p-Value Calculation
+(ctable <- coef(summary(fitpolr_combine)))
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+(ctable <- cbind(ctable, "p value" = p))
+```
+
+job_difficultDisagree and job_fairpaymentDisagree are not significant after stepwise regression.
+
+```{r}
+# convert the coefficients into odds ratios.
+ci <- confint.default(fitpolr_combine)
+exp(cbind(OR = coef(fitpolr_combine), ci))
+```
+
+Check predicted performance for Model 3
+
+```{r}
+# Predicted Performance for training model
+pred_train_combine <- predict(fitpolr_combine, training)
+tab_train <- table(pred_train_combine, training$feeling_content)
+print(tab_train)
+```
+
+```{r}
+table(pred_train_combine, training$feeling_content) %>%
+  prop.table() %>% round(digits = 3)
+```
+
+```{r}
+#confusion matrix
+confusionMatrix(pred_train_combine, training$feeling_content,
+                positive = "pos")
+```
+
+Looking at the sensitivity from the confusion matrix, we can see that the class 'None of the time'has 0% for detecting events in the positive class. In other words, It is not appropriately detected. There is about 1.4%, 5.9% and 26% for the class 'A little of the time', 'Some of the time' and 'Most of the time', respectively that were predicted correctly for their own class. 'All of the time' was the most accurately predicted class which is 90.3%. 
+
+Likewise, this could be a result of a class imbalance. 
+
+```{r}
+#misclassified observations
+mean(as.character(training$feeling_content) != as.character(pred_train_combine))
+```
+
+```{r}
+#accuracy
+(CCR <- sum(diag(tab_train)) / sum(tab_train))
+```
+
+For the training model of model 3, there is 61% accuracy and 39% of misclassified observations.
+
+```{r}
+# Predicted Performance for testing
+pred_test_combine <- predict(fitpolr_combine, testing)
+tab_test <- table(pred_test_combine, testing$feeling_content)
+print(tab_test)
+```
+
+```{r}
+table(pred_test_combine, testing$feeling_content) %>%
+  prop.table() %>% round(digits = 3)
+```
+
+```{r}
+# confusion matrix
+confusionMatrix(pred_test_combine, testing$feeling_content,
+                positive = "pos")
+```
+
+For the testing datasets, the class 'None of the time' is 0% for prediction accuracy. There is about 3.33%, 4.35% and 23.7% for 'A little of the time', 'Some of the time' and 'Most of the time' class, respectively that were predicted correctly for their own class. The most accurate predicted class is 'All of the time' which is 91%.
+
+Therefore, one limitation of this study is imbalanced class as it will give less accurate results.
+
+```{r}
+#misclassified observations
+mean(as.character(testing$feeling_content) != as.character(pred_test_combine))
+```
+
+```{r}
+#accuracy / correctly classified
+(CCR <- sum(diag(tab_test)) / sum(tab_test))
+```
+
+For the testing model of model 3, there is 61% accuracy and 39% of misclassified observations.
+
+### Summary of Performance
+
+```{r}
+tabtab <- matrix(c("59%", "60%", "61%", "59%", "61%", "61%", "13083.25", "12175.1", "11997.6"), ncol = 3, byrow = TRUE)
+colnames(tabtab) <- c("Model 1", "Model 2", "Model 3")
+rownames(tabtab) <- c("Training Accuracy","Testing Accuracy", "AIC")
+tabtab <- as.table(tabtab)
+tabtab
+```
+
+For Model 1 and Model 3, there are no overfitting or underfitting issues as training accuracy and testing accuracy scores are equal. For Model 2, there is a slightly underfitting issue, however it can be ignored as the scores are nearly identical of 60% and 61%.
+
+
+### Model Selection
+According to the AIC scores, Model 1 (external factors) has an AIC score of 13083.25, Model 2 (Big5) has an AIC score of 12175.1 and Model 3 (combined factors) has an AIC score of 11997.6. The lower AIC score indicates a better fit model. Furthermore, the training and testing classification score for Model 3 is slightly greater than the other two at 61%. Therefore, the influencing variables from Model 3 will be interpreted. 
+
+Comparing Model 1 and Model 2 by the AIC scores, it suggests that personality traits have a slightly stronger influence on psychological well-being than external factors. In other words, better predictors of individuals' subjective well-being.
+
+The estimated model can be written as:
+
+##### Equation 1
+$$logit(\hat{P}(Y \le 1)) = -3.92 - 0.00013 * INCOME - (-0.183)*DeFacto - (-0.25)*JOBDifficultSlightlyDisagree \\ - 0.16*JOBFairPaymentSlightlyDisagree - 0.24*JOBInterestingDisagree - (-0.694)*NEUROTICISM - 0.45*EXTRAVERSION \\ - 0.23*CONSCIENTIOUSNESS - (-0.24)*AGREEABLENESS - 0.16*OPENNESStoEXPERIENCE$$
+
+##### Equation 2 
+$$logit(\hat{P}(Y \le 2)) = -2.27 - 0.00013 * INCOME - (-0.183)*DeFacto - (-0.25)*JOBDifficultSlightlyDisagree \\ - 0.16*JOBFairPaymentSlightlyDisagree - 0.24*JOBInterestingDisagree - (-0.694)*NEUROTICISM - 0.45*EXTRAVERSION \\ - 0.23*CONSCIENTIOUSNESS - (-0.24)*AGREEABLENESS - 0.16*OPENNESStoEXPERIENCE$$
+
+##### Equation 3
+$$logit(\hat{P}(Y \le 3)) = -0.77 - 0.00013 * INCOME - (-0.183)*DeFacto - (-0.25)*JOBDifficultSlightlyDisagree \\ - 0.16*JOBFairPaymentSlightlyDisagree - 0.24*JOBInterestingDisagree - (-0.694)*NEUROTICISM - 0.45*EXTRAVERSION \\ - 0.23*CONSCIENTIOUSNESS - (-0.24)*AGREEABLENESS - 0.16*OPENNESStoEXPERIENCE$$
+
+##### Equation 4
+$$logit(\hat{P}(Y \le 4)) = 0.92 - 0.00013 * INCOME - (-0.183)*DeFacto - (-0.25)*JOBDifficultSlightlyDisagree \\ - 0.16*JOBFairPaymentSlightlyDisagree - 0.24*JOBInterestingDisagree - (-0.694)*NEUROTICISM - 0.45*EXTRAVERSION \\ - 0.23*CONSCIENTIOUSNESS - (-0.24)*AGREEABLENESS - 0.16*OPENNESStoEXPERIENCE$$
+
+The positive and negative effects of the variables are indicated by coefficients and the comparison between the variables and their default is indicated by odds ratios (OR). Odds ratio is a measure of the strength of association between the input variable and the response. After removing the non statistically significant variables, the interpretation is as follows:
+
+##### Income
+For every one unit or one dollar increase in income, the odds of feeling more content is 1.00013 times, meaning that there is almost no association between income and happiness or only little difference compared to those who earned less.
+
+
+##### Marital Status
+1. People who are in a De Facto relationship are 0.83 times more likely to be happier than those who are married. In other words, there is a 17% decrease in the happiness.
+
+2. People who are separated with their partners are 0.52 times more likely to be happier than those who are married. In other words, there is a 48% decrease in the happiness.
+
+3. Single people are 0.55 times more likely to be happier than those who are married. In other words, there is a 45% decrease in the happiness.
+
+In conclusion, this corresponds to the finding in the exploratory analysis that people who are married are the happiest. People who are separated and single people are almost at the same level for both result in EDA and from the model.
+
+
+##### Job Difficulty
+1. People who 'slightly disagreed' that their job is difficult, are 0.78 times more likely to be happier than those who 'strongly disagree' that their job is difficult. In other words, there is a 22% decrease in the happiness.
+
+2. People who felt neutral that their job is difficult, are 0.85 times more likely to be happier than those who 'strongly disagree' that their job is difficult. In other words, there is a 15% decrease in the happiness.
+
+3. People who 'slightly agreed' that their job is difficult, are 0.74 times more likely to be happier happy than those who 'strongly disagree' that their job is difficult. In other words, there is a 26% decrease in the happiness.
+
+4. People who 'agreed' that their job is difficult, are 0.75 times more likely to be happier than those who 'strongly disagree' that their job is difficult. In other words, there is a 25% decrease in the happiness.
+
+5. People who 'strongly agreed' that their job is difficult, are 0.55 times more likely to be happier than those who 'strongly disagree' that their job is difficult. In other words, there is a 45% decrease in the happiness.
+
+In conclusion, it can be said that the more individuals find their job difficult the less happy they are. However, the pattern is not obvious because it fluctuates throughout the scale between 'slight disagree' to 'agrred'. It is apparent for people who responded 'strongly agreed' that they are less happy.
+
+
+##### Fair Payment of Wages
+1. People who 'slightly disagreed' that their wages are fair are 1.18 times more likely to be happier than those who 'strongly disagreed' that their wages are fair.
+
+2. People who felt neutral that their wages are fair are 1.31 times more likely to be happier than those who 'strongly disagreed' that their wages are fair.
+
+3. People who 'slightly agreed' that their wages are fair are 1.5 times more likely to be happier than those who 'strongly disagreed' that their wages are fair.
+
+4. People who 'agreed' that their wages are fair are 1.64 times more likely to be happier than those who 'strongly disagreed' that their wages are fair.
+
+5. People who 'strongly agreed' that their wages are fair are 1.82 times more likely to be happier than those who 'strongly disagreed' that their wages are fair.
+
+In conclusion, it can be said that fair payment of wages seems to have a positive effect on happiness, meaning that if individuals feel that they get paid fairly for the things they do in a career, they tend to be happier.
+
+
+##### Interest Levels in the Job
+1. People who 'disagreed' that their job provides them with a variety of interesting things to do, are 1.27 times more likely to be happier than those who 'strongly disagreed'.
+
+2. People who 'slightly disagreed' that their job provides them with a variety of interesting things to do, are 1.41 times more likely to be happier than those who 'strongly disagreed'.
+
+3. People who felt neutral that their job provides them with a variety of interesting things to do, are 1.55 times more likely to be happier than those who 'strongly disagreed'.
+
+4. People who 'slightly agreed' that their job provides them with a variety of interesting things to do, are 1.77 times more likely to be happier than those who 'strongly disagreed'.
+
+5. People who 'agreed' that their job provides them with a variety of interesting things to do, are 1.71 times more likely to be happier than those who 'strongly disagreed'.
+
+6. People who 'strongly agreed' that their job provides them with a variety of interesting things to do, are 2.08 times more likely to be happier than those who 'strongly disagreed'.
+
+In conclusion, individuals tend to be happier the more they find that their job provides them with a variety of interesting things to do.
+
+
+##### Neuroticism
+For every one unit increases in the Neuroticism level, the odds of feeling happier is 0.5 times, meaning that there is 50% decrease in happiness.
+
+
+##### Extraversion
+For every one unit increases in the Extraversion level, the odds of feeling happier is 1.56 times.
+
+
+##### Conscientiousness
+For every one unit increases in the Conscientiousness level, the odds of feeling happier is 1.26 times.
+
+
+##### Agreeableness
+For every one unit increases in the Agreeableness level, the odds of feeling happier is 0.78 times. In other words, there is 22% decrease in happiness.
+
+##### Openness to Experience
+For every one unit increases in the Openness to Experience level, the odds of feeling happier is 1.17 times.
+
+
+## Hypothesis statements
+From the analysis, we can reject the following hypotheses: 
+
+H0 Null hypothesis: There is no association between any input variables and target variable, meaning that there is no relationship between psychological well-being and observed factors. 
+However, some variables are not associated with the output including gender, highest education levels achieved, freedom in the job and flexibility of work schedule. 
+
+H7 : The personality trait agreeableness is positively associated with psychological well-being.
+This cannot be accepted as the result suggests that there is 22% decrease in happiness for every one unit increase in the level of Agreeableness.
+
+On the other hand, we can accept the following hypotheses:
+
+H1 : Personality traits have a stronger influence on psychological well-being than external factors
+
+H2 : Higher income increases happiness. However, the effect is quite small.
+
+H3 : Married people are happier than people of other marital status
+
+H4 : The personality trait neuroticism is negatively associated with psychological well-being.
+
+H5 : The personality trait extraversion is positively associated with psychological well-being.
+
+H6 : The personality trait conscientiousness is positively associated with psychological well-being.
+
+H8 : The personality trait openness to experience is positively associated with psychological well-being.
+
+
+## Limitations of the Study 
+
+1. There are a lot of missing values in which the issue was tackled by rows deletion. This resulted in a smaller population for the study and thus might not be representative.
+
+2. Imbalanced class can cause biased results towards the majority class, causing bad classification of the minority class. This might have resulted in poorer predictive performance.
+
+3. Limited number of prior research studies on the analysis of personality traits in addition to socio-economic factors on psychological well-being.
+
+4. Self-reported answers may be biased, exaggerated or not truthful.
+
+A more in depth explanation of limitations of the study can be found in the final report under 'Limitations of the Study' part.
